@@ -1,0 +1,2 @@
+import {contextBridge,ipcRenderer} from 'electron';
+contextBridge.exposeInMainWorld('faithStream',Object.freeze({getState:()=>ipcRenderer.invoke('stream-view:get'),acknowledge:(revision:number)=>ipcRenderer.invoke('stream-view:ack',revision),onState:(callback:(value:unknown)=>void)=>{const listener=(_event:unknown,value:unknown)=>callback(value);ipcRenderer.on('stream:state',listener);return()=>ipcRenderer.removeListener('stream:state',listener);}}));

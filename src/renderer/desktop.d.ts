@@ -1,0 +1,61 @@
+type Settings={schemaVersion:number;churchName:string;displayId:number|null};
+type Display={id:number;label:string;width:number;height:number;primary:boolean};
+type ServiceRecord=import('./workspace-model').ServiceRecord;
+type ServiceSummary=import('./workspace-model').ServiceSummary;
+type ServiceVersion=import('./workspace-model').ServiceVersion;
+interface Window {faithDesktop?:{
+ renderDiagnostics:()=>Promise<{gpu:Record<string,string>;compositor:string;note:string}>;
+ streamState:()=>Promise<import('./stream-types').StreamState>;
+ openStream:()=>Promise<import('./stream-types').StreamState>;
+ stopStream:()=>Promise<import('./stream-types').StreamState>;
+ streamCommand:(action:string,value?:unknown)=>Promise<import('./stream-types').StreamState>;
+ onStreamState:(callback:(value:import('./stream-types').StreamState)=>void)=>()=>void;
+ listBibles:()=>Promise<import('./BibleLibrary').Translation[]>;
+ importBible:()=>Promise<import('./BibleLibrary').Translation[]|null>;
+ bibleCatalog:(id:string)=>Promise<import('./BibleLibrary').Chapter[]>;
+ searchBible:(id:string,query:string)=>Promise<{verses:import('./BibleLibrary').Verse[];truncated:boolean}>;
+ buildBible:(id:string,book:string,chapter:number,start:number,end:number)=>Promise<import('./workspace-model').Item>;
+ listThemes:()=>Promise<import('./workspace-model').SavedTheme[]>;
+ saveTheme:(id:string|null,version:number,value:{name:string;theme:import('./workspace-model').Theme;style:import('./workspace-model').SlideStyle})=>Promise<import('./workspace-model').SavedTheme>;
+ trashTheme:(id:string,version:number)=>Promise<import('./workspace-model').SavedTheme[]>;
+ restoreTheme:(id:string)=>Promise<import('./workspace-model').SavedTheme>;
+ listMedia:()=>Promise<import('./workspace-model').Media[]>;
+ importMedia:()=>Promise<import('./workspace-model').Media|null>;
+ listSongs:(query:string)=>Promise<import('./song-types').SongSummary[]>;
+ getSong:(id:string)=>Promise<import('./song-types').SongRecord>;
+ saveSong:(id:string|null,version:number,value:import('./song-types').SongData)=>Promise<import('./song-types').SongRecord>;
+ duplicateSong:(id:string)=>Promise<import('./song-types').SongRecord>;
+ trashSong:(id:string,version:number)=>Promise<import('./song-types').SongSummary[]>;
+ restoreSong:(id:string)=>Promise<import('./song-types').SongRecord>;
+ buildSong:(id:string,version:number)=>Promise<import('./workspace-model').Item>;
+ liveState:()=>Promise<import('./live-types').LiveState>;
+ openLive:(id:number)=>Promise<import('./live-types').LiveState>;
+ stopLive:()=>Promise<import('./live-types').LiveState>;
+ liveCommand:(action:string,value?:unknown)=>Promise<import('./live-types').LiveState>;
+ onLiveState:(callback:(value:import('./live-types').LiveState)=>void)=>()=>void;
+ stageState:()=>Promise<import('./stage-types').StageState>;
+ openStage:(id:number)=>Promise<import('./stage-types').StageState>;
+ stopStage:()=>Promise<import('./stage-types').StageState>;
+ stageCommand:(action:string,value?:unknown)=>Promise<import('./stage-types').StageState>;
+ onStageState:(callback:(value:import('./stage-types').StageState)=>void)=>()=>void;
+ bootstrap:()=>Promise<{active:ServiceRecord;services:ServiceSummary[];migration:string;migratedNow:boolean}>;
+ listServices:()=>Promise<ServiceSummary[]>;
+ openService:(id:string)=>Promise<ServiceRecord>;
+ createService:(title:string)=>Promise<ServiceRecord>;
+ saveService:(id:string,version:number,value:import('./workspace-model').WorkspaceData)=>Promise<ServiceRecord>;
+ duplicateService:(id:string)=>Promise<ServiceRecord>;
+ trashService:(id:string)=>Promise<ServiceSummary[]>;
+ restoreService:(id:string)=>Promise<ServiceRecord>;
+ serviceHistory:(id:string)=>Promise<ServiceVersion[]>;
+ restoreVersion:(id:string,version:number,currentVersion:number)=>Promise<ServiceRecord>;
+ backupDatabase:()=>Promise<{path:string;filename:string}>;
+ openBackups:()=>Promise<void>;
+ info:()=>Promise<{version:string;platform:string;dataPath:string}>;
+ readSettings:()=>Promise<Settings>;saveSettings:(value:Settings)=>Promise<Settings>;
+ displays:()=>Promise<Display[]>;testOutput:(id:number)=>Promise<{fullscreen:boolean}>;
+ closeOutput:()=>Promise<void>;openData:()=>Promise<void>;
+ onDisplaysChanged:(callback:()=>void)=>()=>void;
+};}
+interface Window {faithAudience?:{reportMediaEnded?:(id:string,at:number,position:number)=>Promise<void>;reportMediaError?:(id:string)=>Promise<void>;getState:()=>Promise<import('./live-types').LiveState>;acknowledge:(revision:number)=>Promise<void>;onState:(callback:(value:import('./live-types').LiveState)=>void)=>()=>void;};}
+interface Window {faithStage?:{getState:()=>Promise<import('./stage-types').StageState>;onState:(callback:(value:import('./stage-types').StageState)=>void)=>()=>void;};}
+interface Window {faithStream?:{getState:()=>Promise<import('./stream-types').StreamState>;acknowledge:(revision:number)=>Promise<void>;onState:(callback:(value:import('./stream-types').StreamState)=>void)=>()=>void;};}

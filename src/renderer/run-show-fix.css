@@ -1,0 +1,2 @@
+.run-show .run-show-grid>aside{position:static!important;inset:auto!important;width:auto!important;height:auto!important;min-height:0!important;z-index:auto!important;display:block;margin:0!important;box-sizing:border-box}
+@media(max-width:1050px){.run-show .run-show-grid>aside{display:grid;grid-template-columns:1fr 1fr;gap:8px}}

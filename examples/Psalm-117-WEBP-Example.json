@@ -1,0 +1,10 @@
+{
+  "format": "faithpresenter-bible-v1",
+  "name": "World English Bible — Psalm 117 excerpt only",
+  "abbreviation": "WEBP-excerpt",
+  "license": "World English Bible, public domain. This import contains ONLY Psalm 117:1–2, not a complete Bible. Source: https://ebible.org/engwebp/PSA117.htm ; permission: https://worldenglish.bible/ . Retrieved 2026-09-03. LORD represents the divine name; see source footnotes.",
+  "verses": [
+    {"book": "Psalms", "chapter": 117, "verse": 1, "text": "Praise the LORD, all you nations!\nExtol him, all you peoples!"},
+    {"book": "Psalms", "chapter": 117, "verse": 2, "text": "For his loving kindness is great toward us.\nThe LORD’s faithfulness endures forever.\nPraise the LORD!"}
+  ]
+}

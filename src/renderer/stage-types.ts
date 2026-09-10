@@ -1,0 +1,1 @@
+export type StageState={sequence:number;status:'closed'|'ready'|'error';displayId:number|null;displayLabel:string;windowed:boolean;current:string;next:string;message:string;countdownEnd:number|null;showClock:boolean;notice:string};

@@ -1,0 +1,31 @@
+name: Bug report
+description: Report a reproducible FaithPresenter problem
+title: "[Bug]: "
+labels: [bug]
+body:
+  - type: textarea
+    attributes:
+      label: What happened?
+      description: Describe expected and actual behaviour without private church data.
+    validations:
+      required: true
+  - type: textarea
+    attributes:
+      label: Steps to reproduce
+      placeholder: "1. Open…\n2. Select…\n3. Observe…"
+    validations:
+      required: true
+  - type: input
+    attributes:
+      label: FaithPresenter version
+    validations:
+      required: true
+  - type: input
+    attributes:
+      label: Windows version and display setup
+  - type: checkboxes
+    attributes:
+      label: Safety check
+      options:
+        - label: I removed private data, copyrighted lyrics and licensed Bible text.
+          required: true

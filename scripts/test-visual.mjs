@@ -1,0 +1,147 @@
+// Render the actual production assets with a clearly synthetic desktop bridge.
+// This verifies layout, not native Electron projector routing.
+import {chromium} from 'playwright';
+import http from 'node:http';import {Readable} from 'node:stream';
+import {createRequire} from 'node:module';
+import {execFileSync} from 'node:child_process';
+import fs from 'node:fs';import path from 'node:path';import assert from 'node:assert/strict';
+const root=path.resolve(import.meta.dirname,'..'),dist=path.join(root,'dist/renderer'),out=path.join(root,'out/visual');fs.mkdirSync(out,{recursive:true});
+const fixture=path.join(out,'motion.webm');execFileSync('ffmpeg',['-hide_banner','-loglevel','error','-y','-f','lavfi','-i','gradients=size=640x360:rate=20:c0=0x10263a:c1=0x755988:type=radial:seed=42:speed=0.08','-t','8','-pix_fmt','yuv420p','-c:v','libvpx','-b:v','400k',fixture]);
+const {ServiceDatabase}=createRequire(import.meta.url)('../src/desktop/database.js');const testStore=new ServiceDatabase(fs.mkdtempSync(path.join(out,'test-profile-')));const testMedia=await testStore.media.importFile(fixture);
+const server=http.createServer(async(req,res)=>{try{const name=new URL(req.url,'http://local').pathname;if(name.startsWith('/media/')){const response=await testStore.media.response(new Request('faith://media/'+testMedia.id,{headers:req.headers,method:req.method}));res.writeHead(response.status,Object.fromEntries(response.headers));if(response.body)Readable.fromWeb(response.body).pipe(res);else res.end();return;}const file=path.resolve(dist,'.'+name);if(!file.startsWith(dist+path.sep)||!fs.existsSync(file)){res.writeHead(404);res.end();return;}res.setHeader('Content-Type',file.endsWith('.js')?'text/javascript':file.endsWith('.css')?'text/css':'text/html');res.end(file.endsWith('.js')?fs.readFileSync(file,'utf8').replaceAll('faith://media/',origin+'/media/'):fs.readFileSync(file));}catch(e){res.writeHead(500);res.end(String(e));}});
+await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));const origin='http://127.0.0.1:'+server.address().port;
+const supplied=process.env.FAITH_VISUAL_BROWSER_MODULE?(await import(process.env.FAITH_VISUAL_BROWSER_MODULE)).default:null;
+const browser=await chromium.launch(supplied?{headless:true,args:supplied.args,executablePath:process.env.FAITH_VISUAL_BROWSER_PATH||await supplied.executablePath()}:{headless:true});
+try{
+ const page=await browser.newPage({viewport:{width:1440,height:900},deviceScaleFactor:1});const errors=[];page.on('pageerror',e=>errors.push(e.message));
+
+ await page.exposeFunction('__themeList',()=>testStore.themes.list());
+ await page.exposeFunction('__themeSave',(id,version,value)=>testStore.themes.save(id,version,value));
+ await page.exposeFunction('__themeTrash',(id,version)=>testStore.themes.trash(id,version));
+ await page.exposeFunction('__themeRestore',id=>testStore.themes.restore(id));
+ await page.addInitScript(()=>{
+  const item=(id,title,theme,texts)=>({id,title,slides:texts.map((text,i)=>({id:id+'-'+i,text,theme,presentation:{label:i<2?'Verse 1':i<4?'Chorus':'Bridge',role:i<2?'verse':i<4?'chorus':'bridge'}}))});
+  let data={schemaVersion:1,title:'Sunday gathering · Demo',items:[item('welcome','Welcome & announcements','violet',['WELCOME\nWe are glad you are here','A PLACE TO BELONG\nA community to grow with','THIS WEEK\nGather. Connect. Serve.']),item('worship','Opening worship','ocean',['WE GATHER WITH THANKFUL HEARTS\nReady to worship together','ONE VOICE · ONE COMMUNITY\nA moment of praise','LET GRATITUDE FILL THIS ROOM\nLet kindness lead our way','WE GATHER WITH THANKFUL HEARTS\nReady to worship together','A QUIET MOMENT\nTo listen and reflect','ONE VOICE · ONE COMMUNITY\nA moment of praise']),item('prayer','Prayer together','forest',['LET US PRAY\nFor our community and our world']),item('message','Today’s message','plain',['FAITH IN EVERYDAY LIFE\nSunday message']),item('closing','Closing & blessing','violet',['GO WITH PEACE\nSee you next Sunday'])]};
+  const active=()=>({id:'demo',version:1,updatedAt:new Date().toISOString(),data:structuredClone(data)});const services=()=>[{id:'demo',title:data.title,version:1,createdAt:new Date().toISOString(),updatedAt:new Date().toISOString(),deletedAt:null,itemCount:data.items.length,slideCount:12},{id:'other',title:'Evening service · Demo',version:1,createdAt:new Date().toISOString(),updatedAt:new Date().toISOString(),deletedAt:null,itemCount:0,slideCount:0}];
+  let state={sequence:0,revision:0,appliedRevision:-1,status:'closed',displayId:null,displayLabel:'',windowed:false,slide:null,serviceId:'',serviceTitle:'',mode:'slide',church:'Grace Community · Demo',blackout:true,message:'Output closed'};let listener=()=>{};
+  const publish=()=>{state.sequence++;listener(structuredClone(state));return structuredClone(state);};
+  window.faithDesktop={renderDiagnostics:async()=>({gpu:{gpu_compositing:'enabled',video_decode:'enabled',webgl:'enabled'},compositor:'enabled',note:'Synthetic browser fixture reports GPU compositing for visual verification only.'}),info:async()=>({version:'0.10.0',platform:'visual-test',dataPath:'Demo profile (synthetic)'}),readSettings:async()=>({schemaVersion:1,churchName:'Grace Community · Demo',displayId:2}),saveSettings:async s=>s,displays:async()=>[{id:1,label:'Operator screen',width:1440,height:900,primary:true},{id:2,label:'Audience screen (demo)',width:1920,height:1080,primary:false}],onDisplaysChanged:()=>()=>{},bootstrap:async()=>({active:active(),services:services(),migration:'',migratedNow:false}),listServices:async()=>services(),openService:async()=>active(),saveService:async(_id,_v,value)=>{data=structuredClone(value);return active();},listSongs:async()=>[],listThemes:()=>window.__themeList(),saveTheme:(id,v,data)=>window.__themeSave(id,v,data),trashTheme:(id,v)=>window.__themeTrash(id,v),restoreTheme:id=>window.__themeRestore(id),listMedia:async()=>[{id:'12345678-1234-1234-1234-123456789012',name:'Test motion · synthetic.webm',kind:'video',size:1024}],importMedia:async()=>null,liveState:async()=>structuredClone(state),onLiveState:fn=>{listener=fn;return()=>{};},openLive:async()=>{state.status='ready';state.appliedRevision=state.revision;state.displayLabel='Audience screen (demo)';state.message='Simulated renderer ready';return publish();},stopLive:async()=>{state.status='closed';state.blackout=true;return publish();},liveCommand:async(action,value)=>{state.revision++;state.appliedRevision=state.revision;if(action==='transport')state.playback={...value,at:Date.now()};if(action==='take'){if(value.slide.presentation?.media?.id!==state.slide?.presentation?.media?.id)state.playback={playing:true,position:0,at:Date.now(),loop:true};state.slide=value.slide;state.serviceTitle=value.serviceTitle;state.serviceId=value.serviceId;state.blackout=false;state.mode='slide';}if(action==='blackout')state.blackout=!state.blackout;if(action==='clear')state.mode='clear';if(action==='church'){state.church=value;state.mode='church';state.blackout=false;}return publish();},openData:async()=>{},openBackups:async()=>{},testOutput:async()=>({fullscreen:false}),closeOutput:async()=>{}};
+ });
+ await page.goto(origin+'/index.html');await page.getByRole('button',{name:'Preview Welcome & announcements slide 1',exact:true}).waitFor();
+ await page.locator('.schedule-item').filter({hasText:'Opening worship'}).click();
+ await page.getByRole('button',{name:'Open audience · black',exact:true}).click();await page.getByRole('button',{name:'Take Live → Audience',exact:true}).click();
+ for(const viewport of [{width:1440,height:900},{width:1100,height:700},{width:1920,height:1080},{width:960,height:700}]){
+  await page.setViewportSize(viewport);await page.waitForTimeout(150);
+  const layout=await page.evaluate(()=>{const names=['.studio-topbar','.studio-rail','.studio-centre','.resource-library','.studio-output','.studio-status'];return {width:innerWidth,height:innerHeight,scrollWidth:document.documentElement.scrollWidth,scrollHeight:document.documentElement.scrollHeight,boxes:names.map(name=>{const r=document.querySelector(name).getBoundingClientRect();return {name,x:r.x,y:r.y,right:r.right,bottom:r.bottom,width:r.width,height:r.height};})};});
+  assert(layout.scrollWidth<=viewport.width,JSON.stringify(layout));assert(layout.scrollHeight<=viewport.height,JSON.stringify(layout));for(const box of layout.boxes){assert(box.x>=0&&box.y>=0&&box.right<=viewport.width+1&&box.bottom<=viewport.height+1&&box.width>0&&box.height>0,JSON.stringify(box));}
+  assert(await page.getByRole('button',{name:'Blackout',exact:true}).isVisible());
+  await page.screenshot({path:path.join(out,`studio-${viewport.width}.png`)});
+ }
+ await page.setViewportSize({width:1440,height:900});await page.getByRole('checkbox',{name:'All service slides'}).check();assert.equal(await page.locator('.slide-group').count(),5);await page.getByRole('checkbox',{name:'All service slides'}).uncheck();
+ await page.getByRole('button',{name:'Edit',exact:true}).click();await page.getByLabel('Slide text').fill('Edited in preview only');assert.equal(await page.locator('.output-scroll .surface-text').last().textContent(),'WE GATHER WITH THANKFUL HEARTS\nReady to worship together');
+ await page.getByRole('tab',{name:'Songs',exact:true}).click();await page.getByRole('button',{name:'＋ New song',exact:true}).click();await page.getByLabel('Song title',{exact:true}).fill('Unfinished demo song');await page.screenshot({path:path.join(out,'studio-songs.png')});
+ await page.getByRole('tab',{name:'Themes',exact:true}).click();await page.getByRole('tab',{name:'Songs',exact:true}).click();assert.equal(await page.getByLabel('Song title',{exact:true}).inputValue(),'Unfinished demo song');
+ await page.getByRole('button',{name:'Manage services',exact:true}).click();assert(await page.getByRole('button',{name:'Back up database',exact:true}).isVisible());await page.getByRole('button',{name:'Close manager ×',exact:true}).click();
+ // Enhanced UI: labels, preview shortcut, actual HTML video transport and timer tab.
+ await page.getByRole('tab',{name:'Slides',exact:true}).click();
+ await page.getByRole('button',{name:'Preview Opening worship slide 1',exact:true}).click();
+ await page.getByLabel('Section label',{exact:true}).fill('Verse 1');
+ await page.getByLabel('Section colour',{exact:true}).selectOption('verse');
+ await page.getByLabel('Slide jump key',{exact:true}).fill('A');
+ await page.getByLabel('Slide text').fill('WE GATHER WITH THANKFUL HEARTS\nReady to worship together');
+ await page.getByRole('button',{name:'Preview Opening worship slide 2',exact:true}).click();
+ await page.locator('.group-heading button').click();await page.keyboard.press('Alt+a');
+ assert(await page.getByRole('button',{name:'Preview Opening worship slide 1',exact:true}).evaluate(el=>el.classList.contains('selected')));
+ await page.getByRole('checkbox',{name:'Lyrics only',exact:true}).check();
+ assert(await page.locator('.slide-deck .surface-checker').count()>0);
+ await page.getByRole('button',{name:'Show',exact:true}).click();
+ await page.getByRole('tab',{name:'Media',exact:true}).click();
+ await page.getByRole('button',{name:/Test motion · synthetic/}).click();
+ assert.equal(await page.locator('.slide-deck .section-verse').count(),2);
+ assert.equal(await page.locator('.output-scroll video').count(),1); // Preview only before Take
+ await page.getByRole('button',{name:'Take Live → Audience',exact:true}).click();
+ const liveVideo=page.locator('.output-scroll video').last();
+ await page.waitForFunction(()=>{const v=[...document.querySelectorAll('.output-scroll video')].at(-1);return v&&v.currentTime>0.4;});
+ await page.getByRole('button',{name:'Pause video',exact:true}).click();
+ assert(await liveVideo.evaluate(v=>v.paused));
+ await page.getByRole('slider',{name:'Live video position'}).evaluate(el=>{Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(el,'3');el.dispatchEvent(new Event('input',{bubbles:true}));el.dispatchEvent(new Event('change',{bubbles:true}));});
+ await page.waitForFunction(()=>Math.abs([...document.querySelectorAll('.output-scroll video')].at(-1).currentTime-3)<.6);
+ await page.getByRole('button',{name:'Play video',exact:true}).click();
+ await page.waitForFunction(()=>[...document.querySelectorAll('.output-scroll video')].at(-1).currentTime>3.2);
+ await page.getByRole('tab',{name:'Timers',exact:true}).click();
+ await page.getByRole('button',{name:'Start timer',exact:true}).click();await page.waitForTimeout(1200);
+ await page.getByRole('button',{name:'Pause timer',exact:true}).click();assert.notEqual(await page.getByLabel('Time remaining').textContent(),'05:00');
+ await page.getByRole('tab',{name:'Themes',exact:true}).click();await page.getByRole('tab',{name:'Timers',exact:true}).click();assert.notEqual(await page.getByLabel('Time remaining').textContent(),'05:00');
+ await page.getByRole('button',{name:'Reset timer',exact:true}).click();assert.equal(await page.getByLabel('Time remaining').textContent(),'05:00');
+ await page.getByRole('button',{name:'Collapse dock',exact:true}).click();
+ await page.setViewportSize({width:1440,height:1080});await page.locator('.output-scroll').evaluate(el=>el.scrollTop=0);
+ await page.screenshot({path:path.join(out,'studio-enhanced.png')});
+ // Phase 6 styling and reusable themes.
+ await page.getByRole('button',{name:'Edit',exact:true}).click();
+ const previewText=page.locator('.output-scroll .surface-text').first(),liveText=page.locator('.output-scroll .surface-text').last();
+ await page.getByLabel('Font family',{exact:true}).selectOption('Georgia');
+ await page.getByLabel('Maximum font size',{exact:true}).fill('104');
+ await page.getByLabel('Text colour',{exact:true}).evaluate(el=>{el.value='#ffeecc';el.dispatchEvent(new Event('input',{bubbles:true}));});
+ assert.equal(await previewText.evaluate(e=>e.style.color),'rgb(255, 238, 204)');
+ await page.getByLabel('Text alignment',{exact:true}).selectOption('left');
+ assert((await previewText.evaluate(e=>e.style.fontFamily)).includes('Georgia'));
+ assert((await liveText.evaluate(e=>e.style.fontFamily)).includes('Arial'));
+ await page.getByRole('tab',{name:'Layout',exact:true}).click();
+ await page.getByRole('button',{name:'Lower third',exact:true}).click();
+ assert.equal(await previewText.evaluate(e=>e.style.top),'63%');
+ const handle=page.getByRole('button',{name:'Move text box',exact:true});
+ await handle.focus();await page.keyboard.press('ArrowUp');assert.equal(await page.getByLabel('Top %',{exact:true}).inputValue(),'62');
+ const handleBox=await handle.boundingBox();await page.mouse.move(handleBox.x+10,handleBox.y+5);await page.mouse.down();await page.mouse.move(handleBox.x+25,handleBox.y-15,{steps:3});await page.mouse.up();assert.notEqual(await page.getByLabel('Top %',{exact:true}).inputValue(),'62');await page.getByLabel('Top %',{exact:true}).fill('62');
+ await page.getByRole('tab',{name:'Effects',exact:true}).click();
+ await page.getByLabel('Text backplate',{exact:true}).selectOption('lines');
+ await page.getByLabel('Background dim %',{exact:true}).fill('25');
+ await page.getByLabel('Outline width',{exact:true}).fill('2');
+ await page.getByRole('button',{name:'Apply style to item (6)',exact:true}).click();
+ assert.equal(await page.locator('.slide-deck .surface-text').evaluateAll(nodes=>nodes.filter(e=>e.style.fontFamily.includes('Georgia')).length),6);
+ await page.getByRole('button',{name:'Take Live → Audience',exact:true}).click();
+ assert.equal(await liveText.evaluate(e=>e.style.top),'62%');
+ await page.getByRole('tab',{name:'Themes',exact:true}).click();
+ await page.getByLabel('New theme name',{exact:true}).fill('Sunday gold · test');
+ await page.getByRole('button',{name:'Save current as theme',exact:true}).click();
+ await page.getByRole('button',{name:'Apply Sunday gold · test',exact:true}).waitFor();
+ assert(testStore.themes.list().some(t=>t.name==='Sunday gold · test'&&t.style.font==='Georgia'));
+ await page.getByRole('button',{name:'Apply Classic worship',exact:true}).click();
+ assert((await previewText.evaluate(e=>e.style.fontFamily)).includes('Arial'));
+ assert((await liveText.evaluate(e=>e.style.fontFamily)).includes('Georgia'));
+ assert.equal(await page.locator('.output-scroll video').count(),2);
+ await page.getByRole('button',{name:'Apply Sunday gold · test',exact:true}).click();
+ assert((await previewText.evaluate(e=>e.style.fontFamily)).includes('Georgia'));
+ await page.getByRole('button',{name:'Move theme to bin',exact:true}).click();
+ await page.getByRole('button',{name:'Theme recycle bin (1)',exact:true}).click();
+ await page.getByRole('button',{name:'Restore theme',exact:true}).click();
+ await page.getByRole('button',{name:'Show themes',exact:true}).click();
+ await page.getByRole('button',{name:'Apply Sunday gold · test',exact:true}).waitFor();
+ await page.getByRole('tab',{name:'Design',exact:true}).click();
+ await page.getByRole('button',{name:'Copy style',exact:true}).click();
+ await page.getByRole('button',{name:'Preview next →',exact:true}).click();
+ await page.getByRole('button',{name:'Reset style',exact:true}).click();
+ assert.equal(await previewText.evaluate(e=>e.style.top),'8%');
+ await page.getByRole('button',{name:'Paste style',exact:true}).click();
+ assert.equal(await previewText.evaluate(e=>e.style.top),'62%');
+ await page.getByLabel('Slide text').fill('Long content to fit.\n'.repeat(70));
+ await page.getByRole('tab',{name:'Layout',exact:true}).click();
+ await page.getByLabel('Width %',{exact:true}).fill('20');await page.getByLabel('Height %',{exact:true}).fill('10');
+ const fit=await page.locator('.design-canvas .surface-text').evaluate(el=>({size:Number(el.dataset.fittedSize),height:el.clientHeight,content:el.querySelector('.surface-copy').scrollHeight}));
+ assert(fit.size<36&&fit.content<=fit.height+1,JSON.stringify(fit));
+ // Final demo: restore original text, apply a readable line-highlight theme and present explicitly.
+ await page.getByLabel('Slide text').fill('ONE VOICE · ONE COMMUNITY\nA moment of praise');
+ await page.getByRole('tab',{name:'Themes',exact:true}).click();
+ await page.getByRole('checkbox',{name:'Apply to whole item',exact:true}).check();
+ await page.getByRole('button',{name:'Apply Warm line highlights',exact:true}).click();
+ await page.getByRole('button',{name:'Take Live → Audience',exact:true}).click();
+ await page.screenshot({path:path.join(out,'phase6-themes.png')});
+ await page.getByRole('tab',{name:'Design',exact:true}).click();await page.getByRole('tab',{name:'Effects',exact:true}).click();
+ await page.locator('.dock-content').evaluate(el=>el.scrollTop=0);
+ await page.screenshot({path:path.join(out,'phase6-design.png')});
+ await page.setViewportSize({width:1440,height:900});await page.getByRole('tab',{name:'Outputs',exact:true}).click();await page.getByText('Composition & outputs',{exact:true}).waitFor();assert(await page.getByText('NDI',{exact:true}).isVisible());assert(await page.getByText('SDI',{exact:true}).isVisible());assert.equal(await page.locator('.adapter-ready').count(),3);await page.screenshot({path:path.join(out,'FaithPresenter-Phase-10-Pipeline.png')});
+ await page.setViewportSize({width:960,height:700});
+ assert(await page.getByRole('button',{name:'Blackout',exact:true}).isVisible());
+ assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth&&document.documentElement.scrollHeight<=innerHeight));
+ await page.screenshot({path:path.join(out,'phase6-small.png')});
+ assert.deepEqual(errors,[]);console.log('PASS: Chromium layout at 960/1100/1440/1920; preview isolation; draft preservation; section labels and shortcuts; actual video play/pause/seek through production range serving; timer controls; Phase 6 typography, layout, auto-fit, theme save/apply/recycle/restore, style copy/paste and immutable Live styling. Screenshots contain synthetic demonstration data.');
+}finally{await browser.close();server.close();testStore.close();}
